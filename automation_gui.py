@@ -1,14 +1,22 @@
 import sys
 from PyQt5 import QtWidgets, QtCore
+import pyautogui
 
 class CoordinatePicker(QtWidgets.QDialog):
     coords = QtCore.pyqtSignal(int, int)
 
     def __init__(self):
-        super().__init__(None, QtCore.Qt.FramelessWindowHint)
-        self.setWindowState(QtCore.Qt.WindowFullScreen)
+        super().__init__(None, QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
+        self._cover_all_screens()
         self.setWindowOpacity(0.4)
         self.setCursor(QtCore.Qt.CrossCursor)
+
+    def _cover_all_screens(self):
+        screens = QtWidgets.QApplication.screens()
+        rect = QtCore.QRect()
+        for screen in screens:
+            rect = rect.united(screen.geometry())
+        self.setGeometry(rect)
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
@@ -33,8 +41,12 @@ class ActionWorker(QtCore.QThread):
                 else:
                     msg = f"Sleep {action['seconds']}s"
                 self.action_signal.emit(f"Cycle {c+1}: {msg}")
-                if action["type"] == "sleep":
+
+                if action["type"] == "click":
+                    pyautogui.click(x=action['x'], y=action['y'])
+                else:
                     self.msleep(action["seconds"] * 1000)
+
                 self.msleep(self.delay)
         self.finished.emit()
 
