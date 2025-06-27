@@ -66,8 +66,10 @@ class AutomationWindow(QtWidgets.QWidget):
 
         btn_layout = QtWidgets.QHBoxLayout()
         self.add_btn = QtWidgets.QPushButton("Add Action")
+        self.edit_btn = QtWidgets.QPushButton("Edit Action")
         self.play_btn = QtWidgets.QPushButton("Play")
         btn_layout.addWidget(self.add_btn)
+        btn_layout.addWidget(self.edit_btn)
         btn_layout.addWidget(self.play_btn)
         layout.addLayout(btn_layout)
 
@@ -86,7 +88,30 @@ class AutomationWindow(QtWidgets.QWidget):
         self.setLayout(layout)
 
         self.add_btn.clicked.connect(self.add_action)
+        self.edit_btn.clicked.connect(self.edit_action)
         self.play_btn.clicked.connect(self.start_automation)
+
+    def _pick_coordinates(self, start_x=None, start_y=None):
+        picker = CoordinatePicker()
+        coords = {}
+
+        def save_coords(x, y):
+            coords['x'] = x
+            coords['y'] = y
+
+        picker.coords.connect(save_coords)
+        picker.exec_()
+        if 'x' not in coords:
+            return None
+
+        screen = QtWidgets.QApplication.screenAt(QtCore.QPoint(coords['x'], coords['y']))
+        if screen:
+            ratio = screen.physicalDotsPerInch() / screen.logicalDotsPerInch()
+        else:
+            ratio = 1.0
+        phys_x = int(coords['x'] * ratio)
+        phys_y = int(coords['y'] * ratio)
+        return coords['x'], coords['y'], phys_x, phys_y
 
     def add_action(self):
         action_types = ["Click", "Sleep"]
@@ -95,24 +120,12 @@ class AutomationWindow(QtWidgets.QWidget):
         if not ok:
             return
         if choice == "Click":
-            picker = CoordinatePicker()
-            coords = {}
-
-            def save_coords(x, y):
-                coords['x'] = x
-                coords['y'] = y
-
-            picker.coords.connect(save_coords)
-            picker.exec_()
-            if 'x' not in coords:
+            result = self._pick_coordinates()
+            if result is None:
                 return
-
-            screen = QtWidgets.QApplication.screenAt(QtCore.QPoint(coords['x'], coords['y']))
-            dpr = screen.devicePixelRatio() if screen else 1.0
-            phys_x = int(coords['x'] * dpr)
-            phys_y = int(coords['y'] * dpr)
+            logical_x, logical_y, phys_x, phys_y = result
             action = {"type": "click", "x": phys_x, "y": phys_y}
-            label = f"Click ({coords['x']}, {coords['y']})"
+            label = f"Click ({logical_x}, {logical_y})"
         else:
             secs, ok = QtWidgets.QInputDialog.getDouble(
                 self, "Sleep", "Seconds:", 1.0, 0.1, 3600.0, decimals=2)
@@ -122,6 +135,30 @@ class AutomationWindow(QtWidgets.QWidget):
             label = f"Sleep {secs:.2f}s"
         self.actions.append(action)
         self.list_widget.addItem(label)
+
+    def edit_action(self):
+        row = self.list_widget.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "Select an action to edit")
+            return
+        action = self.actions[row]
+        if action["type"] == "click":
+            result = self._pick_coordinates()
+            if result is None:
+                return
+            logical_x, logical_y, phys_x, phys_y = result
+            action["x"] = phys_x
+            action["y"] = phys_y
+            label = f"Click ({logical_x}, {logical_y})"
+        else:
+            secs, ok = QtWidgets.QInputDialog.getDouble(
+                self, "Sleep", "Seconds:", action["seconds"], 0.1, 3600.0, decimals=2)
+            if not ok:
+                return
+            action["seconds"] = float(secs)
+            label = f"Sleep {secs:.2f}s"
+        self.actions[row] = action
+        self.list_widget.item(row).setText(label)
 
     def append_log(self, text):
         self.log.appendPlainText(text)
