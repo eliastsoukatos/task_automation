@@ -13,6 +13,8 @@ Las coordenadas capturadas se ajustan automáticamente para configuraciones con 
 
 Las acciones agregadas se muestran en la lista principal y se ejecutarán en orden.
 
+Si necesitas modificar algún paso, selecciona la acción en la lista y pulsa **Edit Action** para cambiar sus parámetros.
+
 ## Ejecutar
 
 Selecciona el número de *Cycles* y presiona **Play** para repetir la secuencia de acciones.
