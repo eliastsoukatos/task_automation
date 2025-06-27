@@ -45,7 +45,7 @@ class ActionWorker(QtCore.QThread):
                 if action["type"] == "click":
                     pyautogui.click(x=action['x'], y=action['y'])
                 else:
-                    self.msleep(action["seconds"] * 1000)
+                    self.msleep(int(action["seconds"] * 1000))
 
                 self.msleep(self.delay)
         self.finished.emit()
@@ -97,22 +97,29 @@ class AutomationWindow(QtWidgets.QWidget):
         if choice == "Click":
             picker = CoordinatePicker()
             coords = {}
+
             def save_coords(x, y):
                 coords['x'] = x
                 coords['y'] = y
+
             picker.coords.connect(save_coords)
             picker.exec_()
             if 'x' not in coords:
                 return
-            action = {"type": "click", "x": coords['x'], "y": coords['y']}
+
+            screen = QtWidgets.QApplication.screenAt(QtCore.QPoint(coords['x'], coords['y']))
+            dpr = screen.devicePixelRatio() if screen else 1.0
+            phys_x = int(coords['x'] * dpr)
+            phys_y = int(coords['y'] * dpr)
+            action = {"type": "click", "x": phys_x, "y": phys_y}
             label = f"Click ({coords['x']}, {coords['y']})"
         else:
-            secs, ok = QtWidgets.QInputDialog.getInt(
-                self, "Sleep", "Seconds:", 1, 1)
+            secs, ok = QtWidgets.QInputDialog.getDouble(
+                self, "Sleep", "Seconds:", 1.0, 0.1, 3600.0, decimals=2)
             if not ok:
                 return
-            action = {"type": "sleep", "seconds": secs}
-            label = f"Sleep {secs}s"
+            action = {"type": "sleep", "seconds": float(secs)}
+            label = f"Sleep {secs:.2f}s"
         self.actions.append(action)
         self.list_widget.addItem(label)
 
