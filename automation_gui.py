@@ -1,6 +1,20 @@
 import sys
 from PyQt5 import QtWidgets, QtCore
 
+class CoordinatePicker(QtWidgets.QDialog):
+    coords = QtCore.pyqtSignal(int, int)
+
+    def __init__(self):
+        super().__init__(None, QtCore.Qt.FramelessWindowHint)
+        self.setWindowState(QtCore.Qt.WindowFullScreen)
+        self.setWindowOpacity(0.4)
+        self.setCursor(QtCore.Qt.CrossCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self.coords.emit(event.globalX(), event.globalY())
+            self.accept()
+
 class ActionWorker(QtCore.QThread):
     action_signal = QtCore.pyqtSignal(str)
     finished = QtCore.pyqtSignal()
@@ -14,7 +28,13 @@ class ActionWorker(QtCore.QThread):
     def run(self):
         for c in range(self.cycles):
             for action in self.actions:
-                self.action_signal.emit(f"Cycle {c+1}: {action}")
+                if action["type"] == "click":
+                    msg = f"Click at ({action['x']}, {action['y']})"
+                else:
+                    msg = f"Sleep {action['seconds']}s"
+                self.action_signal.emit(f"Cycle {c+1}: {msg}")
+                if action["type"] == "sleep":
+                    self.msleep(action["seconds"] * 1000)
                 self.msleep(self.delay)
         self.finished.emit()
 
@@ -57,9 +77,32 @@ class AutomationWindow(QtWidgets.QWidget):
         self.play_btn.clicked.connect(self.start_automation)
 
     def add_action(self):
-        name = f"Action {len(self.actions)+1}"
-        self.actions.append(name)
-        self.list_widget.addItem(name)
+        action_types = ["Click", "Sleep"]
+        choice, ok = QtWidgets.QInputDialog.getItem(
+            self, "Add Action", "Action Type:", action_types, 0, False)
+        if not ok:
+            return
+        if choice == "Click":
+            picker = CoordinatePicker()
+            coords = {}
+            def save_coords(x, y):
+                coords['x'] = x
+                coords['y'] = y
+            picker.coords.connect(save_coords)
+            picker.exec_()
+            if 'x' not in coords:
+                return
+            action = {"type": "click", "x": coords['x'], "y": coords['y']}
+            label = f"Click ({coords['x']}, {coords['y']})"
+        else:
+            secs, ok = QtWidgets.QInputDialog.getInt(
+                self, "Sleep", "Seconds:", 1, 1)
+            if not ok:
+                return
+            action = {"type": "sleep", "seconds": secs}
+            label = f"Sleep {secs}s"
+        self.actions.append(action)
+        self.list_widget.addItem(label)
 
     def append_log(self, text):
         self.log.appendPlainText(text)
