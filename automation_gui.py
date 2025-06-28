@@ -136,19 +136,12 @@ class AutomationWindow(QtWidgets.QWidget):
         if 'x' not in coords:
             return None
 
-        screen = QtWidgets.QApplication.screenAt(QtCore.QPoint(coords['x'], coords['y']))
-        if screen:
-            ratio = screen.physicalDotsPerInch() / screen.logicalDotsPerInch()
-        else:
-            ratio = 1.0
-        phys_x = int(coords['x'] * ratio)
-        phys_y = int(coords['y'] * ratio)
         if self.debug_check.isChecked():
-            DebugOverlay(phys_x, phys_y)
+            DebugOverlay(coords['x'], coords['y'])
             self.append_log(
-                f"Picked logical ({coords['x']}, {coords['y']}) -> physical ({phys_x}, {phys_y})"
+                f"Picked global ({coords['x']}, {coords['y']})"
             )
-        return coords['x'], coords['y'], phys_x, phys_y
+        return coords['x'], coords['y']
 
     def add_action(self):
         action_types = ["Click", "Sleep"]
@@ -160,9 +153,9 @@ class AutomationWindow(QtWidgets.QWidget):
             result = self._pick_coordinates()
             if result is None:
                 return
-            logical_x, logical_y, phys_x, phys_y = result
-            action = {"type": "click", "x": phys_x, "y": phys_y}
-            label = f"Click ({logical_x}, {logical_y})"
+            x, y = result
+            action = {"type": "click", "x": x, "y": y}
+            label = f"Click ({x}, {y})"
         else:
             secs, ok = QtWidgets.QInputDialog.getDouble(
                 self, "Sleep", "Seconds:", 1.0, 0.1, 3600.0, decimals=2)
@@ -183,10 +176,10 @@ class AutomationWindow(QtWidgets.QWidget):
             result = self._pick_coordinates()
             if result is None:
                 return
-            logical_x, logical_y, phys_x, phys_y = result
-            action["x"] = phys_x
-            action["y"] = phys_y
-            label = f"Click ({logical_x}, {logical_y})"
+            x, y = result
+            action["x"] = x
+            action["y"] = y
+            label = f"Click ({x}, {y})"
         else:
             secs, ok = QtWidgets.QInputDialog.getDouble(
                 self, "Sleep", "Seconds:", action["seconds"], 0.1, 3600.0, decimals=2)
