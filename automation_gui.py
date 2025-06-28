@@ -1,5 +1,5 @@
 import sys
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 import pyautogui
 
 class CoordinatePicker(QtWidgets.QDialog):
@@ -23,8 +23,34 @@ class CoordinatePicker(QtWidgets.QDialog):
             self.coords.emit(event.globalX(), event.globalY())
             self.accept()
 
+class DebugOverlay(QtWidgets.QWidget):
+    """Small crosshair overlay to visualize a click position."""
+
+    def __init__(self, x, y, timeout=500):
+        super().__init__(
+            None,
+            QtCore.Qt.FramelessWindowHint
+            | QtCore.Qt.WindowStaysOnTopHint
+            | QtCore.Qt.Tool,
+        )
+        self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(QtCore.Qt.WA_NoSystemBackground)
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        self.resize(20, 20)
+        self.move(x - 10, y - 10)
+        QtCore.QTimer.singleShot(timeout, self.close)
+        self.show()
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        pen = QtGui.QPen(QtGui.QColor("red"), 2)
+        painter.setPen(pen)
+        painter.drawLine(0, 10, 20, 10)
+        painter.drawLine(10, 0, 10, 20)
+
 class ActionWorker(QtCore.QThread):
     action_signal = QtCore.pyqtSignal(str)
+    debug_click = QtCore.pyqtSignal(int, int)
     finished = QtCore.pyqtSignal()
 
     def __init__(self, actions, cycles, delay=500):
@@ -43,7 +69,10 @@ class ActionWorker(QtCore.QThread):
                 self.action_signal.emit(f"Cycle {c+1}: {msg}")
 
                 if action["type"] == "click":
+                    self.debug_click.emit(action['x'], action['y'])
                     pyautogui.click(x=action['x'], y=action['y'])
+                    pos = pyautogui.position()
+                    self.action_signal.emit(f"Actual mouse position {pos}")
                 else:
                     self.msleep(int(action["seconds"] * 1000))
 
@@ -81,6 +110,9 @@ class AutomationWindow(QtWidgets.QWidget):
         cycle_layout.addWidget(self.cycle_spin)
         layout.addLayout(cycle_layout)
 
+        self.debug_check = QtWidgets.QCheckBox("Debug")
+        layout.addWidget(self.debug_check)
+
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         layout.addWidget(self.log)
@@ -111,6 +143,11 @@ class AutomationWindow(QtWidgets.QWidget):
             ratio = 1.0
         phys_x = int(coords['x'] * ratio)
         phys_y = int(coords['y'] * ratio)
+        if self.debug_check.isChecked():
+            DebugOverlay(phys_x, phys_y)
+            self.append_log(
+                f"Picked logical ({coords['x']}, {coords['y']}) -> physical ({phys_x}, {phys_y})"
+            )
         return coords['x'], coords['y'], phys_x, phys_y
 
     def add_action(self):
@@ -163,6 +200,10 @@ class AutomationWindow(QtWidgets.QWidget):
     def append_log(self, text):
         self.log.appendPlainText(text)
 
+    def show_debug_marker(self, x, y):
+        if self.debug_check.isChecked():
+            DebugOverlay(x, y)
+
     def start_automation(self):
         if not self.actions:
             QtWidgets.QMessageBox.warning(self, "No Actions", "Add at least one action")
@@ -171,6 +212,7 @@ class AutomationWindow(QtWidgets.QWidget):
         self.play_btn.setEnabled(False)
         self.worker = ActionWorker(self.actions, cycles)
         self.worker.action_signal.connect(self.append_log)
+        self.worker.debug_click.connect(self.show_debug_marker)
         self.worker.finished.connect(lambda: self.play_btn.setEnabled(True))
         self.worker.start()
 
