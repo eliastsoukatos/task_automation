@@ -18,3 +18,11 @@ Si necesitas modificar algún paso, selecciona la acción en la lista y pulsa **
 ## Ejecutar
 
 Selecciona el número de *Cycles* y presiona **Play** para repetir la secuencia de acciones.
+
+## Modo de depuración
+
+Activa la casilla **Debug** para mostrar un marcador rojo en cada coordenada
+capturada y en cada clic ejecutado. En el registro se indicarán además las
+coordenadas lógicas y físicas obtenidas, así como la posición del mouse tras
+cada clic. Esto ayuda a diagnosticar problemas si el cursor no coincide con el
+punto seleccionado.
