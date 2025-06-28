@@ -1,6 +1,48 @@
 import sys
+import os
+import json
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyautogui
+
+
+class CycleManager:
+    """Handle saving and loading of action cycles."""
+
+    FILE = "cycles.json"
+
+    def __init__(self):
+        self.cycles = []
+        self.load()
+
+    def load(self):
+        if os.path.exists(self.FILE):
+            try:
+                with open(self.FILE, "r", encoding="utf-8") as fh:
+                    self.cycles = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                self.cycles = []
+
+    def save(self):
+        try:
+            with open(self.FILE, "w", encoding="utf-8") as fh:
+                json.dump(self.cycles, fh, indent=2)
+        except OSError:
+            pass
+
+    def add_cycle(self, name, actions):
+        self.cycles.append({"name": name, "actions": actions})
+        self.save()
+
+    def delete_cycle(self, index):
+        if 0 <= index < len(self.cycles):
+            self.cycles.pop(index)
+            self.save()
+
+    def rename_cycle(self, index, new_name):
+        if 0 <= index < len(self.cycles):
+            self.cycles[index]["name"] = new_name
+            self.save()
+
 
 class CoordinatePicker(QtWidgets.QDialog):
     coords = QtCore.pyqtSignal(int, int)
@@ -83,24 +125,65 @@ class AutomationWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Automation Runner")
-        self.resize(400, 300)
+        self.resize(600, 400)
         self.actions = []
+        self.cycle_manager = CycleManager()
         self._build_ui()
 
     def _build_ui(self):
         layout = QtWidgets.QVBoxLayout()
 
-        self.list_widget = QtWidgets.QListWidget()
-        layout.addWidget(self.list_widget)
+        action_btns = QtWidgets.QHBoxLayout()
+        self.add_click_btn = QtWidgets.QPushButton("Add Click")
+        self.add_sleep_btn = QtWidgets.QPushButton("Add Sleep")
+        action_btns.addWidget(self.add_click_btn)
+        action_btns.addWidget(self.add_sleep_btn)
+        layout.addLayout(action_btns)
 
-        btn_layout = QtWidgets.QHBoxLayout()
-        self.add_btn = QtWidgets.QPushButton("Add Action")
+        auto_sleep_layout = QtWidgets.QHBoxLayout()
+        self.auto_sleep_check = QtWidgets.QCheckBox("Automatic Sleep")
+        self.auto_sleep_spin = QtWidgets.QDoubleSpinBox()
+        self.auto_sleep_spin.setDecimals(2)
+        self.auto_sleep_spin.setRange(0.1, 3600.0)
+        self.auto_sleep_spin.setValue(0.5)
+        self.auto_sleep_spin.setVisible(False)
+        auto_sleep_layout.addWidget(self.auto_sleep_check)
+        auto_sleep_layout.addWidget(self.auto_sleep_spin)
+        layout.addLayout(auto_sleep_layout)
+
+        lists_layout = QtWidgets.QHBoxLayout()
+        left_layout = QtWidgets.QVBoxLayout()
+        right_layout = QtWidgets.QVBoxLayout()
+
+        self.list_widget = QtWidgets.QListWidget()
+        left_layout.addWidget(self.list_widget)
+
+        edit_layout = QtWidgets.QHBoxLayout()
         self.edit_btn = QtWidgets.QPushButton("Edit Action")
+        self.save_cycle_btn = QtWidgets.QPushButton("Save Cycle")
         self.play_btn = QtWidgets.QPushButton("Play")
-        btn_layout.addWidget(self.add_btn)
-        btn_layout.addWidget(self.edit_btn)
-        btn_layout.addWidget(self.play_btn)
-        layout.addLayout(btn_layout)
+        edit_layout.addWidget(self.edit_btn)
+        edit_layout.addWidget(self.save_cycle_btn)
+        edit_layout.addWidget(self.play_btn)
+        left_layout.addLayout(edit_layout)
+
+        lists_layout.addLayout(left_layout)
+
+        right_layout.addWidget(QtWidgets.QLabel("Saved Cycles"))
+        self.cycle_list = QtWidgets.QListWidget()
+        right_layout.addWidget(self.cycle_list)
+        cycle_btns = QtWidgets.QHBoxLayout()
+        self.insert_cycle_btn = QtWidgets.QPushButton("Insert")
+        self.rename_cycle_btn = QtWidgets.QPushButton("Rename")
+        self.delete_cycle_btn = QtWidgets.QPushButton("Delete")
+        cycle_btns.addWidget(self.insert_cycle_btn)
+        cycle_btns.addWidget(self.rename_cycle_btn)
+        cycle_btns.addWidget(self.delete_cycle_btn)
+        right_layout.addLayout(cycle_btns)
+
+        lists_layout.addLayout(right_layout)
+
+        layout.addLayout(lists_layout)
 
         cycle_layout = QtWidgets.QHBoxLayout()
         cycle_layout.addWidget(QtWidgets.QLabel("Cycles:"))
@@ -119,9 +202,18 @@ class AutomationWindow(QtWidgets.QWidget):
 
         self.setLayout(layout)
 
-        self.add_btn.clicked.connect(self.add_action)
+        self.add_click_btn.clicked.connect(self.add_click)
+        self.add_sleep_btn.clicked.connect(self.add_sleep)
+        self.auto_sleep_check.toggled.connect(self.auto_sleep_spin.setVisible)
         self.edit_btn.clicked.connect(self.edit_action)
+        self.save_cycle_btn.clicked.connect(self.save_cycle)
+        self.insert_cycle_btn.clicked.connect(self.insert_cycle)
+        self.rename_cycle_btn.clicked.connect(self.rename_cycle)
+        self.delete_cycle_btn.clicked.connect(self.delete_cycle)
         self.play_btn.clicked.connect(self.start_automation)
+
+        self._refresh_cycle_list()
+
 
     def _pick_coordinates(self, start_x=None, start_y=None):
         picker = CoordinatePicker()
@@ -143,28 +235,30 @@ class AutomationWindow(QtWidgets.QWidget):
             )
         return coords['x'], coords['y']
 
-    def add_action(self):
-        action_types = ["Click", "Sleep"]
-        choice, ok = QtWidgets.QInputDialog.getItem(
-            self, "Add Action", "Action Type:", action_types, 0, False)
-        if not ok:
-            return
-        if choice == "Click":
-            result = self._pick_coordinates()
-            if result is None:
-                return
-            x, y = result
-            action = {"type": "click", "x": x, "y": y}
-            label = f"Click ({x}, {y})"
+    def _add_action(self, action):
+        if action["type"] == "click":
+            label = f"Click ({action['x']}, {action['y']})"
         else:
-            secs, ok = QtWidgets.QInputDialog.getDouble(
-                self, "Sleep", "Seconds:", 1.0, 0.1, 3600.0, decimals=2)
-            if not ok:
-                return
-            action = {"type": "sleep", "seconds": float(secs)}
-            label = f"Sleep {secs:.2f}s"
+            label = f"Sleep {action['seconds']:.2f}s"
         self.actions.append(action)
         self.list_widget.addItem(label)
+
+    def add_click(self):
+        result = self._pick_coordinates()
+        if result is None:
+            return
+        x, y = result
+        self._add_action({"type": "click", "x": x, "y": y})
+
+        if self.auto_sleep_check.isChecked():
+            self._add_action({"type": "sleep", "seconds": float(self.auto_sleep_spin.value())})
+
+    def add_sleep(self):
+        secs, ok = QtWidgets.QInputDialog.getDouble(
+            self, "Sleep", "Seconds:", 1.0, 0.1, 3600.0, decimals=2)
+        if not ok:
+            return
+        self._add_action({"type": "sleep", "seconds": float(secs)})
 
     def edit_action(self):
         row = self.list_widget.currentRow()
@@ -189,6 +283,58 @@ class AutomationWindow(QtWidgets.QWidget):
             label = f"Sleep {secs:.2f}s"
         self.actions[row] = action
         self.list_widget.item(row).setText(label)
+
+    def save_cycle(self):
+        if not self.actions:
+            QtWidgets.QMessageBox.warning(self, "Empty", "No actions to save")
+            return
+        name, ok = QtWidgets.QInputDialog.getText(self, "Save Cycle", "Name:")
+        if not ok or not name.strip():
+            return
+        # store a deep copy
+        actions_copy = [dict(a) for a in self.actions]
+        self.cycle_manager.add_cycle(name.strip(), actions_copy)
+        self._refresh_cycle_list()
+
+    def insert_cycle(self):
+        row = self.cycle_list.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "Select a cycle")
+            return
+        cycle = self.cycle_manager.cycles[row]
+        for action in cycle["actions"]:
+            self._add_action(dict(action))
+
+    def delete_cycle(self):
+        row = self.cycle_list.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "Select a cycle")
+            return
+        if QtWidgets.QMessageBox.question(
+            self,
+            "Delete",
+            "Delete selected cycle?",
+        ) == QtWidgets.QMessageBox.Yes:
+            self.cycle_manager.delete_cycle(row)
+            self._refresh_cycle_list()
+
+    def rename_cycle(self):
+        row = self.cycle_list.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.warning(self, "No Selection", "Select a cycle")
+            return
+        name, ok = QtWidgets.QInputDialog.getText(
+            self, "Rename Cycle", "New name:", text=self.cycle_manager.cycles[row]["name"]
+        )
+        if not ok or not name.strip():
+            return
+        self.cycle_manager.rename_cycle(row, name.strip())
+        self._refresh_cycle_list()
+
+    def _refresh_cycle_list(self):
+        self.cycle_list.clear()
+        for cycle in self.cycle_manager.cycles:
+            self.cycle_list.addItem(cycle["name"]) 
 
     def append_log(self, text):
         self.log.appendPlainText(text)
