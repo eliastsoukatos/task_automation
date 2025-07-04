@@ -1,35 +1,54 @@
-# task_automation
+# Task Automation GUI
 
-Este programa permite crear una lista de acciones sencillas para automatizar tareas.
+**Task Automation GUI** is a desktop application for building and running simple automation macros. Through an intuitive interface you can record mouse clicks, define waiting times and combine them into repeatable cycles. It is ideal for automating repetitive tasks in marketing, sales or any workflow that requires consistent user interaction.
 
-## Agregar acciones
+![screenshot](docs/screenshot_placeholder.png)
 
-Utiliza los botones **Add Click** y **Add Sleep** para crear tu secuencia de acciones.
+## Key Features
 
-1. **Add Click** abre el selector de coordenadas. Todas las pantallas se oscurecen y el cursor se vuelve una cruz. Haz clic en la posición deseada para guardar las coordenadas. Si tienes activado **Automatic Sleep**, justo después se agrega un Sleep con la duración configurada.
-2. **Add Sleep** te permite definir un tiempo de espera (admite decimales) antes de continuar con la siguiente acción.
+- **Point-and-click action builder** – capture screen coordinates and insert sleep steps from the GUI.
+- **Cycle management** – save, rename and reuse groups of actions.
+- **Looped execution** – run sequences for a configurable number of cycles.
+- **Debug mode** – overlay markers show exactly where each click occurs.
+- **JSON-based storage** – action cycles are stored in a local JSON file for portability.
 
-Las coordenadas capturadas se almacenan como posiciones globales en píxeles, por lo que cada clic ocurre exactamente en el punto seleccionado, incluso con varias pantallas o diferentes escalados.
+## Possible Use Cases
 
-Las acciones agregadas se muestran en la lista principal y se ejecutarán en orden.
+- Creating marketing demos that replay the same steps.
+- Automating data entry or simple form submissions.
+- Replaying tedious configuration flows in test environments.
+- Any scenario where a lightweight macro saves time.
 
-Si necesitas modificar algún paso, selecciona la acción en la lista y pulsa **Edit Action** para cambiar sus parámetros.
+## Tech Stack
 
-## Guardar ciclos de acciones
+- **Python 3**
+- **PyQt5** for the graphical user interface
+- **pyautogui** for controlling the mouse
 
-Pulsa **Save Cycle** para guardar la lista actual de acciones con un nombre. Los ciclos guardados aparecen en la sección **Saved Cycles**, donde puedes renombrarlos, eliminarlos o insertarlos en la secuencia actual.
+## Installation
 
-## Componer secuencias
+```bash
+pip install -r requirements.txt
+python automation_gui.py
+```
 
-Con los botones de **Insert**, puedes añadir un ciclo guardado al final de la lista de acciones. De esta forma es posible combinar varios ciclos y acciones sueltas antes de ejecutar la macro.
+The application runs on Windows, macOS and Linux where PyQt5 and pyautogui are supported.
 
-## Ejecutar
+## Project Structure
 
-Selecciona el número de *Cycles* y presiona **Play** para repetir la secuencia de acciones.
+```
+automation_gui.py   # main application
+requirements.txt    # Python dependencies
+LICENSE             # project license (MIT)
+docs/               # extended documentation
+examples/           # usage examples and snippets
+data/               # placeholder for sample datasets
+```
 
-## Modo de depuración
+## Contributing
 
-Activa la casilla **Debug** para mostrar un marcador rojo en cada coordenada
-capturada y en cada clic ejecutado. En el registro se indican las coordenadas
-globales obtenidas y la posición del mouse tras cada clic. Esto ayuda a
-diagnosticar problemas si el cursor no coincide con el punto seleccionado.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the terms of the MIT License. See [LICENSE](LICENSE) for details.
